@@ -1,4 +1,6 @@
+import os
 import unittest
+from unittest import mock
 
 from fastapi.testclient import TestClient
 
@@ -90,7 +92,8 @@ class TodoApiTestCase(unittest.TestCase):
     def setUp(self):
         self.state = FakeDBState()
         self.original_get_db = app_module.get_db_connection
-        app_module.get_db_connection = lambda: FakeConnection(self.state)
+        self.fake_connection_factory = lambda: FakeConnection(self.state)
+        app_module.get_db_connection = self.fake_connection_factory
         app_module.init_db()
         self.client_context = TestClient(app_module.app)
         self.client = self.client_context.__enter__()
@@ -142,3 +145,50 @@ class TodoApiTestCase(unittest.TestCase):
 
         list_resp = self.client.get("/todos")
         self.assertEqual(list_resp.json(), [])
+
+    def test_update_requires_payload(self):
+        create_resp = self.client.post("/todos", json={"title": "algo"})
+        todo_id = create_resp.json()["id"]
+
+        response = self.client.put(f"/todos/{todo_id}", json={})
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_missing_todo_returns_404(self):
+        response = self.client.put("/todos/999", json={"title": "n/a"})
+        self.assertEqual(response.status_code, 404)
+
+    def test_db_check_failure_path(self):
+        original_factory = app_module.get_db_connection
+
+        def raising_connection():
+            raise RuntimeError("db down")
+
+        app_module.get_db_connection = raising_connection
+        try:
+            self.assertFalse(app_module.db_check())
+        finally:
+            app_module.get_db_connection = original_factory
+
+    def test_get_db_connection_uses_psycopg2(self):
+        with mock.patch("api.app.psycopg2.connect") as mock_connect:
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "DB_HOST": "localhost",
+                    "DB_PORT": "1234",
+                    "POSTGRES_USER": "user1",
+                    "POSTGRES_PASSWORD": "pass1",
+                    "POSTGRES_DB": "db1",
+                },
+                clear=False,
+            ):
+                conn = self.original_get_db()
+                mock_connect.assert_called_once_with(
+                    host="localhost",
+                    port="1234",
+                    user="user1",
+                    password="pass1",
+                    dbname="db1",
+                    connect_timeout=2,
+                )
+                self.assertEqual(conn, mock_connect.return_value)

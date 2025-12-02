@@ -1,0 +1,27 @@
+# Byte-code files
+*.pyc
+__pycache__/
+*.pyd
+*.so
+
+# Virtual environment
+venv/
+.venv/
+env/
+.env/
+
+# Editor/IDE specific files
+.vscode/
+.idea/
+*.swp
+*.bak
+
+# Log files
+*.log
+
+# Test files
+.pytest_cache/
+.coverage
+
+# Miscellaneous
+.DS_Store # macOS specific
