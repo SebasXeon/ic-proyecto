@@ -92,25 +92,22 @@ def update_todo(todo_id: int, todo: TodoUpdate):
     if todo.title is None and todo.completed is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide a field to update.")
 
-    set_clauses = []
-    values = []
-    if todo.title is not None:
-        set_clauses.append("title = %s")
-        values.append(todo.title)
-    if todo.completed is not None:
-        set_clauses.append("completed = %s")
-        values.append(todo.completed)
-
-    values.append(todo_id)
-    query = f"UPDATE todos SET {', '.join(set_clauses)} WHERE id = %s RETURNING id, title, completed;"
-
     conn = get_db_connection()
     with conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(query, values)
-            updated = cur.fetchone()
-            if not updated:
+            cur.execute("SELECT id, title, completed FROM todos WHERE id = %s;", (todo_id,))
+            existing = cur.fetchone()
+            if not existing:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Todo not found.")
+
+            new_title = todo.title if todo.title is not None else existing["title"]
+            new_completed = todo.completed if todo.completed is not None else existing["completed"]
+
+            cur.execute(
+                "UPDATE todos SET title = %s, completed = %s WHERE id = %s RETURNING id, title, completed;",
+                (new_title, new_completed, todo_id),
+            )
+            updated = cur.fetchone()
     conn.close()
     return updated
 
