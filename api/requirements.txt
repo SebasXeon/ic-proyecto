@@ -1,4 +1,6 @@
+httpx
 fastapi
 uvicorn[standard]
 psycopg2-binary
-httpx
+pytest
+pytest-cov
